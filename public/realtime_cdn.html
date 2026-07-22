@@ -404,7 +404,7 @@
 
         <div class="code-box">// 1. Inicializar cliente CDN
 const db = new PulseSocketDB({
-  apiKey: 'pk_dev_4dbb07976f2f4466b50ca314ca0e9c5954',
+  apiKey: 'pk_dev_xxxxxxxxxxxx',
   apiBase: 'http://localhost:3001'
 });
 
@@ -417,6 +417,23 @@ db.collection('contas').onSnapshot(change => {
 await db.collection('contas').add({ ... });</div>
 
         <form id="simForm">
+          <div class="form-group">
+            <label>URL do Servidor PulseSocketDB</label>
+            <input type="text" id="configUrl" class="form-control" placeholder="http://localhost:3001">
+          </div>
+
+          <div class="form-group">
+            <label>API Key (dev)</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="configApiKey" class="form-control" placeholder="pk_dev_xxxxxxxxxxxx">
+              <button type="button" id="btnApplyConfig" class="btn btn-emerald" style="width: auto; padding: 0.65rem 1rem; white-space: nowrap;">
+                <i class="fa-solid fa-sync"></i> Conectar
+              </button>
+            </div>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--card-border); margin: 1rem 0;">
+
           <div class="form-group">
             <label>Descrição do Item</label>
             <input type="text" id="inputDesc" class="form-control" placeholder="Ex: Mensalidade Software CDN" required>
@@ -465,14 +482,13 @@ await db.collection('contas').add({ ... });</div>
   </div>
 
   <script>
-    // 1. Inicializar o cliente oficial PulseSocketDB via CDN
-    const db = new PulseSocketDB({
-      apiKey: 'pk_dev_4dbb07976f2f4466b50ca314ca0e9c59',
-      apiBase: 'http://localhost:3001'
-    });
+    const STORAGE_KEY_URL = 'pulsesocket_target_url';
+    const STORAGE_KEY_APIKEY = 'pulsesocket_api_key';
 
+    let db = null;
     let itemsMap = new Map();
     let eventsCount = 0;
+    let unsubscribeFn = null;
 
     const streamFeed = document.getElementById('streamFeed');
     const emptyState = document.getElementById('emptyState');
@@ -481,16 +497,95 @@ await db.collection('contas').add({ ... });</div>
     const statEventsCount = document.getElementById('statEventsCount');
     const feedCountText = document.getElementById('feedCountText');
 
+    function loadSavedConfig() {
+      const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
+      const savedKey = localStorage.getItem(STORAGE_KEY_APIKEY);
+
+      if (savedUrl) document.getElementById('configUrl').value = savedUrl;
+      if (savedKey) document.getElementById('configApiKey').value = savedKey;
+    }
+
+    function getTargetUrl() {
+      return document.getElementById('configUrl')?.value?.trim() || 'http://localhost:3001';
+    }
+
+    function getApiKey() {
+      return document.getElementById('configApiKey')?.value?.trim() || '';
+    }
+
+    function saveConfig() {
+      const url = getTargetUrl();
+      const key = getApiKey();
+      localStorage.setItem(STORAGE_KEY_URL, url);
+      localStorage.setItem(STORAGE_KEY_APIKEY, key);
+    }
+
     function extractDoc(change) {
       if (!change) return { id: null, data: null };
       const inner = change.payload || change.data || change;
       const data = inner.data || inner.document || inner;
-      const id = change.id || inner.id || data.id || data._id || (data.descricao ? `${data.descricao}_${data.valor}` : null);
+      const id = change.id || inner.id || data?.id || data?._id || (data?.descricao ? `${data.descricao}_${data.valor}` : null);
       return { id, data };
     }
 
-    // 2. Carregar documentos iniciais via db.collection('contas').get()
+    function resetDataState() {
+      itemsMap.clear();
+      eventsCount = 0;
+      statEventsCount.innerText = '0';
+      statTotalItems.innerText = '0';
+      statTotalValor.innerText = 'R$ 0,00';
+      feedCountText.innerText = '0 itens';
+      streamFeed.innerHTML = '';
+      emptyState.style.display = 'block';
+    }
+
+    function reinitCDNClient() {
+      saveConfig();
+      resetDataState();
+
+      if (unsubscribeFn) {
+        unsubscribeFn();
+        unsubscribeFn = null;
+      }
+
+      const apiKey = getApiKey();
+      const apiBase = getTargetUrl();
+
+      if (!apiKey) {
+        emptyState.innerHTML = `
+          <i class="fa-solid fa-key" style="font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+          <p>Por favor, informe a API Key acima para conectar ao PulseSocketDB.</p>
+        `;
+        return;
+      }
+
+      emptyState.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+        <p>Carregando documentos com db.collection('contas').get()...</p>
+      `;
+
+      // Inicializar cliente CDN com as chaves atuais
+      db = new PulseSocketDB({ apiKey, apiBase });
+
+      // Carregar documentos iniciais
+      loadDocs();
+
+      // Assinar onSnapshot em tempo real
+      unsubscribeFn = db.collection('contas').onSnapshot((change) => {
+        eventsCount++;
+        statEventsCount.innerText = eventsCount;
+        console.log('⚡ Real-time Event via CDN onSnapshot:', change);
+
+        const { id, data } = extractDoc(change);
+        if (id && data && data.descricao) {
+          itemsMap.set(id, data);
+          renderFeed(id);
+        }
+      });
+    }
+
     async function loadDocs() {
+      if (!db) return;
       try {
         const docs = await db.collection('contas').get();
         console.log('Documentos carregados via CDN SDK:', docs);
@@ -508,19 +603,6 @@ await db.collection('contas').add({ ... });</div>
         console.error('Erro ao carregar documentos via CDN:', err);
       }
     }
-
-    // 3. Escutar atualizações em tempo real via db.collection('contas').onSnapshot()
-    db.collection('contas').onSnapshot((change) => {
-      eventsCount++;
-      statEventsCount.innerText = eventsCount;
-      console.log('⚡ Real-time Event via CDN onSnapshot:', change);
-
-      const { id, data } = extractDoc(change);
-      if (id && data && data.descricao) {
-        itemsMap.set(id, data);
-        renderFeed(id);
-      }
-    });
 
     function renderFeed(highlightId = null) {
       const items = Array.from(itemsMap.values()).reverse();
@@ -555,6 +637,11 @@ await db.collection('contas').add({ ... });</div>
     // 4. Operação CRUD via Form Submit: db.collection('contas').add(...)
     document.getElementById('simForm').addEventListener('submit', async (e) => {
       e.preventDefault();
+      if (!db) {
+        alert('Por favor, informe uma API Key válida e conecte antes de enviar.');
+        return;
+      }
+
       const desc = document.getElementById('inputDesc').value;
       const valor = parseFloat(document.getElementById('inputValor').value);
       const status = document.getElementById('inputStatus').value;
@@ -581,7 +668,15 @@ await db.collection('contas').add({ ... });</div>
       });
     }
 
-    loadDocs();
+    // Event listeners para troca de chave e URL
+    document.getElementById('btnApplyConfig')?.addEventListener('click', reinitCDNClient);
+    document.getElementById('configUrl')?.addEventListener('change', reinitCDNClient);
+    document.getElementById('configApiKey')?.addEventListener('change', reinitCDNClient);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSavedConfig();
+      reinitCDNClient();
+    });
   </script>
 </body>
 </html>
