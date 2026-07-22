@@ -566,10 +566,6 @@
         socketInstance.on('data_changed', (payload) => {
           handleIncomingEvent(payload);
         });
-
-        socketInstance.on('collection_updated', (payload) => {
-          handleIncomingEvent(payload);
-        });
       }
     }
 
@@ -577,7 +573,7 @@
       if (!change) return { id: null, data: null };
       const inner = change.payload || change.data || change;
       const data = inner.data || inner.document || inner;
-      const id = change.id || inner.id || data.id || data._id || (data.descricao ? `${data.descricao}_${data.valor}` : null);
+      const id = change.id || inner.id || data?.id || data?._id || (data?.descricao ? `${data.descricao}_${data.valor}` : null);
       return { id, data };
     }
 
@@ -628,12 +624,17 @@
     }
 
     function handleIncomingEvent(eventData) {
-      eventsCount++;
-      statEventsCount.innerText = eventsCount;
-      statLastEventTime.innerText = new Date().toLocaleTimeString();
-
       const { id, data } = extractDoc(eventData);
       if (id && data) {
+        // Se o item já existe no mapa e é idêntico, ignora para não criar alerta duplicado
+        if (itemsMap.has(id) && JSON.stringify(itemsMap.get(id)) === JSON.stringify(data)) {
+          return;
+        }
+
+        eventsCount++;
+        statEventsCount.innerText = eventsCount;
+        statLastEventTime.innerText = new Date().toLocaleTimeString();
+
         itemsMap.set(id, data);
         renderFeed(id);
         if (data.descricao) {
@@ -718,9 +719,7 @@
         }
 
         if (res.ok) {
-          const created = await res.json();
-          const itemData = created.data || created;
-          handleIncomingEvent(itemData);
+          // Limpa o formulário; o evento real-time do WebSocket atualizará a tela e exibirá o toast 1 única vez
           document.getElementById('inputDesc').value = '';
           document.getElementById('inputValor').value = '';
         } else {
