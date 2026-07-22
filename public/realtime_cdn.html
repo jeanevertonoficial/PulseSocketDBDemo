@@ -481,16 +481,26 @@ await db.collection('contas').add({ ... });</div>
     const statEventsCount = document.getElementById('statEventsCount');
     const feedCountText = document.getElementById('feedCountText');
 
+    function extractDoc(change) {
+      if (!change) return { id: null, data: null };
+      const inner = change.payload || change.data || change;
+      const data = inner.data || inner.document || inner;
+      const id = change.id || inner.id || data.id || data._id || (data.descricao ? `${data.descricao}_${data.valor}` : null);
+      return { id, data };
+    }
+
     // 2. Carregar documentos iniciais via db.collection('contas').get()
     async function loadDocs() {
       try {
         const docs = await db.collection('contas').get();
         console.log('Documentos carregados via CDN SDK:', docs);
         if (Array.isArray(docs)) {
+          itemsMap.clear();
           docs.forEach(doc => {
-            const data = doc.data || doc;
-            const id = doc.id || doc._id || data.id;
-            itemsMap.set(id, data);
+            const { id, data } = extractDoc(doc);
+            if (id && data) {
+              itemsMap.set(id, data);
+            }
           });
           renderFeed();
         }
@@ -505,22 +515,19 @@ await db.collection('contas').add({ ... });</div>
       statEventsCount.innerText = eventsCount;
       console.log('⚡ Real-time Event via CDN onSnapshot:', change);
 
-      const inner = change.payload || change.data || change;
-      const item = inner.data || inner.document || inner;
-      const id = change.id || inner.id || item.id || Date.now();
-      if (item) {
-        itemsMap.set(id, item);
+      const { id, data } = extractDoc(change);
+      if (id && data && data.descricao) {
+        itemsMap.set(id, data);
         renderFeed(id);
       }
     });
 
     function renderFeed(highlightId = null) {
       const items = Array.from(itemsMap.values()).reverse();
-      if (items.length === 0) return;
+      emptyState.style.display = items.length === 0 ? 'block' : 'none';
 
-      emptyState.style.display = 'none';
-      statTotalItems.innerText = items.length;
-      feedCountText.innerText = `${items.length} itens`;
+      statTotalItems.innerText = itemsMap.size;
+      feedCountText.innerText = `${itemsMap.size} itens`;
 
       const totalSoma = items.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
       statTotalValor.innerText = `R$ ${totalSoma.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
