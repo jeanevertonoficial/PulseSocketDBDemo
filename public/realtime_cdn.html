@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseSocketDB — Painel CDN Real-Time</title>
+
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Socket.io Client Library -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <!-- PulseSocketDB Official CDN -->
+  <script src="/pulsesocketdb.min.js"></script>
+  <!-- Em produção: <script src="https://cdn.pulsesocketdb.com/pulsesocketdb.min.js"></script> -->
+
+  <style>
+    :root {
+      --bg-dark: #0b0f19;
+      --card-bg: rgba(17, 24, 39, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-indigo: #6366f1;
+      --accent-indigo-glow: rgba(99, 102, 241, 0.35);
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.12) 0px, transparent 50%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem 1.5rem;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* Header & Branding */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent-emerald), #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      color: white;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .brand-title h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-title p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .cdn-tag {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 0.75rem;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--accent-emerald);
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      animation: pulse-ring 1.8s infinite;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+    }
+
+    .stat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .stat-value {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    /* Layout */
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+      .dashboard-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .panel-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.9rem;
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--accent-emerald);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-emerald {
+      background: linear-gradient(135deg, var(--accent-emerald), #059669);
+      color: white;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-emerald:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+
+    .stream-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 560px;
+      overflow-y: auto;
+    }
+
+    .item-card {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .item-card.new-pulse {
+      border-color: var(--accent-emerald);
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .item-title {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .item-meta {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .item-amount {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .badge-pago { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .badge-pendente { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .badge-atrasado { background: rgba(244, 63, 94, 0.15); color: #f87171; }
+    .badge-em_processamento { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+
+    /* Code Snippet Box */
+    .code-box {
+      background: #0f172a;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #38bdf8;
+      margin-bottom: 1rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-code"></i>
+        </div>
+        <div class="brand-title">
+          <h1>PulseSocketDB — Versão CDN JavaScript</h1>
+          <p>Usando <span class="cdn-tag">&lt;script src="https://cdn.pulsesocketdb.com/pulsesocketdb.min.js"&gt;</span></p>
+        </div>
+      </div>
+
+      <div id="statusBadge" class="status-badge">
+        <div class="pulse-dot"></div>
+        <span id="statusText">CDN Conectada (PulseSocketDB)</span>
+      </div>
+    </header>
+
+    <!-- Metrics Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Documentos na Coleção</span>
+          <i class="fa-solid fa-database text-emerald"></i>
+        </div>
+        <div class="stat-value" id="statTotalItems">0</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Valor Acumulado</span>
+          <i class="fa-solid fa-wallet text-indigo"></i>
+        </div>
+        <div class="stat-value" id="statTotalValor">R$ 0,00</div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-header">
+          <span>Eventos CDN onSnapshot</span>
+          <i class="fa-solid fa-bolt text-amber"></i>
+        </div>
+        <div class="stat-value" id="statEventsCount">0</div>
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="dashboard-layout">
+      <!-- Left Panel: Form + Code Snippet -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-code" style="color: var(--accent-emerald);"></i>
+            <span>Exemplo de Código CDN</span>
+          </div>
+        </div>
+
+        <div class="code-box">// 1. Inicializar cliente CDN
+const db = new PulseSocketDB({
+  apiKey: 'pk_dev_4dbb07976f2f4466b50ca314ca0e9c5954',
+  apiBase: 'http://localhost:3001'
+});
+
+// 2. Escutar alterações (onSnapshot)
+db.collection('contas').onSnapshot(change => {
+  console.log('Real-Time Change:', change);
+});
+
+// 3. Adicionar registro
+await db.collection('contas').add({ ... });</div>
+
+        <form id="simForm">
+          <div class="form-group">
+            <label>Descrição do Item</label>
+            <input type="text" id="inputDesc" class="form-control" placeholder="Ex: Mensalidade Software CDN" required>
+          </div>
+
+          <div class="form-group">
+            <label>Valor (R$)</label>
+            <input type="number" step="0.01" id="inputValor" class="form-control" placeholder="199.90" required>
+          </div>
+
+          <div class="form-group">
+            <label>Status</label>
+            <select id="inputStatus" class="form-control">
+              <option value="PENDENTE">PENDENTE</option>
+              <option value="PAGO">PAGO</option>
+              <option value="ATRASADO">ATRASADO</option>
+              <option value="EM_PROCESSAMENTO">EM_PROCESSAMENTO</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-emerald">
+            <i class="fa-solid fa-plus"></i>
+            <span>Adicionar via db.collection().add()</span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Right Panel: Live Feed -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-stream" style="color: var(--accent-emerald);"></i>
+            <span>Documentos Carregados via CDN (Coleção: <code>contas</code>)</span>
+          </div>
+          <span style="font-size: 0.8rem; color: var(--text-muted);" id="feedCountText">0 itens</span>
+        </div>
+
+        <div class="stream-feed" id="streamFeed">
+          <div style="text-align: center; padding: 3rem; color: var(--text-muted);" id="emptyState">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+            <p>Carregando documentos com db.collection('contas').get()...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. Inicializar o cliente oficial PulseSocketDB via CDN
+    const db = new PulseSocketDB({
+      apiKey: 'pk_dev_4dbb07976f2f4466b50ca314ca0e9c59',
+      apiBase: 'http://localhost:3001'
+    });
+
+    let itemsMap = new Map();
+    let eventsCount = 0;
+
+    const streamFeed = document.getElementById('streamFeed');
+    const emptyState = document.getElementById('emptyState');
+    const statTotalItems = document.getElementById('statTotalItems');
+    const statTotalValor = document.getElementById('statTotalValor');
+    const statEventsCount = document.getElementById('statEventsCount');
+    const feedCountText = document.getElementById('feedCountText');
+
+    // 2. Carregar documentos iniciais via db.collection('contas').get()
+    async function loadDocs() {
+      try {
+        const docs = await db.collection('contas').get();
+        console.log('Documentos carregados via CDN SDK:', docs);
+        if (Array.isArray(docs)) {
+          docs.forEach(doc => {
+            const data = doc.data || doc;
+            const id = doc.id || doc._id || data.id;
+            itemsMap.set(id, data);
+          });
+          renderFeed();
+        }
+      } catch (err) {
+        console.error('Erro ao carregar documentos via CDN:', err);
+      }
+    }
+
+    // 3. Escutar atualizações em tempo real via db.collection('contas').onSnapshot()
+    db.collection('contas').onSnapshot((change) => {
+      eventsCount++;
+      statEventsCount.innerText = eventsCount;
+      console.log('⚡ Real-time Event via CDN onSnapshot:', change);
+
+      const inner = change.payload || change.data || change;
+      const item = inner.data || inner.document || inner;
+      const id = change.id || inner.id || item.id || Date.now();
+      if (item) {
+        itemsMap.set(id, item);
+        renderFeed(id);
+      }
+    });
+
+    function renderFeed(highlightId = null) {
+      const items = Array.from(itemsMap.values()).reverse();
+      if (items.length === 0) return;
+
+      emptyState.style.display = 'none';
+      statTotalItems.innerText = items.length;
+      feedCountText.innerText = `${items.length} itens`;
+
+      const totalSoma = items.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+      statTotalValor.innerText = `R$ ${totalSoma.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+      streamFeed.innerHTML = items.map(item => {
+        const isHighlight = item.id === highlightId;
+        const statusClass = `badge-${(item.status || 'PENDENTE').toLowerCase()}`;
+        return `
+          <div class="item-card ${isHighlight ? 'new-pulse' : ''}">
+            <div class="item-info">
+              <div class="item-title">${escapeHtml(item.descricao)}</div>
+              <div class="item-meta">
+                <span>Vencimento: ${escapeHtml(item.data_vencimento || 'N/A')}</span>
+                <span class="badge ${statusClass}">${escapeHtml(item.status || 'PENDENTE')}</span>
+              </div>
+            </div>
+            <div class="item-amount" style="color: var(--accent-emerald);">
+              R$ ${parseFloat(item.valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 4. Operação CRUD via Form Submit: db.collection('contas').add(...)
+    document.getElementById('simForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const desc = document.getElementById('inputDesc').value;
+      const valor = parseFloat(document.getElementById('inputValor').value);
+      const status = document.getElementById('inputStatus').value;
+
+      try {
+        const result = await db.collection('contas').add({
+          descricao: desc,
+          valor: valor,
+          status: status,
+          data_vencimento: new Date().toISOString().split('T')[0]
+        });
+
+        console.log('Item inserido via db.collection().add():', result);
+        document.getElementById('inputDesc').value = '';
+        document.getElementById('inputValor').value = '';
+      } catch (err) {
+        alert('Erro no envio via CDN: ' + err.message);
+      }
+    });
+
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    loadDocs();
+  </script>
+</body>
+</html>

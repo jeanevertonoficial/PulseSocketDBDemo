@@ -1,0 +1,18 @@
+{
+  "name": "pulsesocketdb-demo",
+  "version": "1.0.0",
+  "description": "Projeto Standalone para Testes e Monitoramento do PulseSocketDB",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "sync": "node demo_pulsesocket_sync.js pk_dev_4dbb07976f2f4466b50ca314ca0e9c59"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  }
+}
