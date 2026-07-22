@@ -418,8 +418,13 @@ await db.collection('contas').add({ ... });</div>
 
         <form id="simForm">
           <div class="form-group">
-            <label>URL do Servidor PulseSocketDB</label>
-            <input type="text" id="configUrl" class="form-control" placeholder="http://localhost:3001">
+            <label>Ambiente do Servidor PulseSocketDB</label>
+            <select id="configEnvSelect" class="form-control" style="margin-bottom: 0.5rem;">
+              <option value="local">💻 Local (http://localhost:3001)</option>
+              <option value="prod">🌐 Produção (https://api.pulsesocketdb.com)</option>
+              <option value="custom">⚙️ URL Personalizada</option>
+            </select>
+            <input type="text" id="configUrl" class="form-control" placeholder="http://localhost:3001" value="http://localhost:3001">
           </div>
 
           <div class="form-group">
@@ -482,6 +487,7 @@ await db.collection('contas').add({ ... });</div>
   </div>
 
   <script>
+    const STORAGE_KEY_ENV = 'pulsesocket_env_choice';
     const STORAGE_KEY_URL = 'pulsesocket_target_url';
     const STORAGE_KEY_APIKEY = 'pulsesocket_api_key';
 
@@ -498,14 +504,38 @@ await db.collection('contas').add({ ... });</div>
     const feedCountText = document.getElementById('feedCountText');
 
     function loadSavedConfig() {
+      const savedEnv = localStorage.getItem(STORAGE_KEY_ENV) || 'local';
       const savedUrl = localStorage.getItem(STORAGE_KEY_URL);
       const savedKey = localStorage.getItem(STORAGE_KEY_APIKEY);
 
-      if (savedUrl) document.getElementById('configUrl').value = savedUrl;
+      const envSelect = document.getElementById('configEnvSelect');
+      if (envSelect) envSelect.value = savedEnv;
+
+      const urlInput = document.getElementById('configUrl');
+      if (urlInput) {
+        if (savedEnv === 'prod') {
+          urlInput.value = 'https://api.pulsesocketdb.com';
+          urlInput.readOnly = true;
+          urlInput.style.opacity = '0.7';
+        } else if (savedEnv === 'local') {
+          urlInput.value = savedUrl || 'http://localhost:3001';
+          urlInput.readOnly = false;
+          urlInput.style.opacity = '1';
+        } else {
+          urlInput.value = savedUrl || '';
+          urlInput.readOnly = false;
+          urlInput.style.opacity = '1';
+        }
+      }
+
       if (savedKey) document.getElementById('configApiKey').value = savedKey;
     }
 
     function getTargetUrl() {
+      const envChoice = document.getElementById('configEnvSelect')?.value || 'local';
+      if (envChoice === 'prod') {
+        return 'https://api.pulsesocketdb.com';
+      }
       return document.getElementById('configUrl')?.value?.trim() || 'http://localhost:3001';
     }
 
@@ -514,8 +544,10 @@ await db.collection('contas').add({ ... });</div>
     }
 
     function saveConfig() {
+      const envChoice = document.getElementById('configEnvSelect')?.value || 'local';
       const url = getTargetUrl();
       const key = getApiKey();
+      localStorage.setItem(STORAGE_KEY_ENV, envChoice);
       localStorage.setItem(STORAGE_KEY_URL, url);
       localStorage.setItem(STORAGE_KEY_APIKEY, key);
     }
@@ -668,7 +700,25 @@ await db.collection('contas').add({ ... });</div>
       });
     }
 
-    // Event listeners para troca de chave e URL
+    // Event listeners para troca de ambiente, chave e URL
+    document.getElementById('configEnvSelect')?.addEventListener('change', (e) => {
+      const choice = e.target.value;
+      const urlInput = document.getElementById('configUrl');
+      if (choice === 'prod') {
+        urlInput.value = 'https://api.pulsesocketdb.com';
+        urlInput.readOnly = true;
+        urlInput.style.opacity = '0.7';
+      } else if (choice === 'local') {
+        urlInput.value = 'http://localhost:3001';
+        urlInput.readOnly = false;
+        urlInput.style.opacity = '1';
+      } else {
+        urlInput.readOnly = false;
+        urlInput.style.opacity = '1';
+      }
+      reinitCDNClient();
+    });
+
     document.getElementById('btnApplyConfig')?.addEventListener('click', reinitCDNClient);
     document.getElementById('configUrl')?.addEventListener('change', reinitCDNClient);
     document.getElementById('configApiKey')?.addEventListener('change', reinitCDNClient);
